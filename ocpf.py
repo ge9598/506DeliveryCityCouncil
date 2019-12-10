@@ -1,16 +1,12 @@
 import pandas as pd
+import re
 import numpy as np
 import Levenshtein
 #data= pd.read_excel('2018_ocpf.xlsx')
-def read_file_2018():
-    excel_file = "2018_ocpf.xlsx"
+def read_file(filename):
+    excel_file = filename
     data = pd.read_excel(excel_file)
-    result = data[['Date', 'Contributor', 'Address', 'Zip', 'Occupation', 'Employer', 'Amount', 'CPF ID','Recipient','Record Type Description']]
-    return result
-def read_file_2019():
-    excel_file = "2019_ocpf.xlsx"
-    data = pd.read_excel(excel_file)
-    result = data[['Date', 'Contributor', 'Address', 'Zip', 'Occupation', 'Employer', 'Amount', 'CPF ID','Recipient','Record Type Description']]
+    result = data[['Date', 'Contributor', 'Address', 'Zip', 'Occupation', 'Employer', 'Amount','Recipient','Record Type Description']]
     return result
 
 def clear_data(data):
@@ -70,8 +66,8 @@ def donation_from_PACS(year,data,time_inc=0):
             a.append(ALLPACS[i])
             a.append(unions[index[i]])
             res.append(a)
-    # print(ALLPACS)
-    # print(unions)
+    print(ALLPACS)
+    print(unions)
     for i in ALLPACS:
         if i not in UnionPACS:
             NotUnionPACS.append(i)
@@ -129,9 +125,9 @@ def getPACS(year):
         names.append(words[1])
     return names
 
-def getlobbyists():
-    data=pd.read_csv("lobbyist.csv")
-    result=data[["NAMEFIRST","NAMELAST"]]
+def getlobbyists(data):
+    lobbists=pd.read_csv("lobbyist.csv")
+    result=lobbists[["NAMEFIRST","NAMELAST"]]
     #print(result)
     names=[]
     for index,row in result.iterrows():
@@ -142,24 +138,83 @@ def getlobbyists():
         else:
             names.append(str(row["NAMELAST"])+', '+str(row["NAMEFIRST"]))
 
+    data['IsLobbyist'] = False
+    rows = data[['Contributor']]
+    contributors=[]
+    for index, row in rows.iterrows():
+        contributors.append(row['Contributor'])
+    #print(contributors)
+    for i in range(len(contributors)):
+        for kwds in names:
+            if kwds in contributors[i]:
+                data.loc[i,'IsLobbyist']=True
+    return data
 
-    return names
+def keywords_PACS(data,time_inc=0):
+    PACkwds=['PAC','Political Action Committee','Action Comm','Pol Action Comm']
+    data['IsPAC']=0
+    rows=data[['Contributor']]
+    contributors=[]
+    for index, row in rows.iterrows():
+        contributors.append(row['Contributor'])
+    #print(contributors)
+    for i in range(len(contributors)):
+        for kwds in PACkwds:
+            if kwds in contributors[i] or contributors[i] in kwds:
+                data.loc[i,'IsPAC']=1
+    return data
+def keywords_UnionPACS(data,time_inc=0):
+    unionkwds='Local [0-9]'
+    #data['IsPAC']=0
+    rows=data[['Contributor']]
+    contributors=[]
+    for index, row in rows.iterrows():
+        contributors.append(row['Contributor'])
+    #print(contributors)
+    for i in range(len(contributors)):
+            if re.search(unionkwds,contributors[i]) or ("Union" in contributors[i]) or ("Labor" in contributors[i]):
+                data.loc[i,'IsPAC']=2
+    return data
+def self_donation(data):
+    rows=data[['Contributor','Recipient']]
+    data['self']=False
+    for index,row in rows.iterrows():
+        cont=row['Contributor']
+        reci=row['Recipient']
+        if Levenshtein.distance(cont,reci)<=4:
+            print(cont,reci)
 
-data2018=read_file_2018()
-clean_data2018=clear_data(data2018)
+        if cont==reci:
+
+            data.loc[index,'self']=True
+    return data
+data20167=read_file('2016-2017data.xlsx')
+'''
+clean_data2018=clear_data(data20167)
 print(clean_data2018)
 #print(getPACS(2018))
-print(donation_from_PACS(2018,clean_data2018))
-print(donation_from_unionPACS(2018,clean_data2018))
+print(donation_from_PACS(2016,clean_data2018))
+print(donation_from_unionPACS(2016,clean_data2018))
+print(donation_from_PACS(2017,clean_data2018))
+print(donation_from_unionPACS(2017,clean_data2018))
+'''
+data20189=read_file('2018-2019data.xlsx')
 
-
-data2019=read_file_2019()
-clean_data2019=clear_data(data2019)
+clean_data2019=clear_data(data20189)
 print(clean_data2019)
-#print(getPACS(2018))
+print(getPACS(2018))
 print(donation_from_PACS(2019,clean_data2019))
 print(donation_from_unionPACS(2019,clean_data2019))
 
+newdtpac=keywords_PACS(data20189)
+print(newdtpac)
+newdtunion=keywords_UnionPACS(newdtpac)
+newdtlobbyist=getlobbyists(newdtunion)
+print(newdtlobbyist[newdtlobbyist['IsPAC']!=0])
 
-print(clean_data2018[clean_data2018['Contributor'].isin(getlobbyists())])
-print(clean_data2019[clean_data2019['Contributor'].isin(getlobbyists())])
+print(newdtlobbyist[newdtlobbyist['IsLobbyist']==True])
+newdtself=self_donation(newdtlobbyist)
+print(newdtself)
+#print(data20167[data20167['Contributor'].isin(getlobbyists())])
+#print(data20189[data20189['Contributor'].isin(getlobbyists())])
+#newdtself.to_excel("20189data.xlsx")
